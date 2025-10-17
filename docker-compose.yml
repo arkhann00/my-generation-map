@@ -1,0 +1,26 @@
+services:
+  site:
+    build: .
+    container_name: mygenmap
+    restart: unless-stopped
+    expose:
+      - "80" # доступно внутри сети compose
+    # если хочешь собирать реже, можно использовать готовый образ nginx и COPY . в Dockerfile (как у тебя уже сделано)
+
+  caddy:
+    image: caddy:alpine
+    container_name: caddy_mygenmap
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - site
+
+volumes:
+  caddy_data:
+  caddy_config:

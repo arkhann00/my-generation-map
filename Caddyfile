@@ -1,0 +1,10 @@
+map.example.com {
+  # прокси на сервис "site" внутри docker-compose сети
+  reverse_proxy site:80
+
+  # опционально: сжатие и кэш статики
+  encode gzip
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+  }
+}
