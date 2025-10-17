@@ -2,7 +2,7 @@
 FROM nginx:alpine
 
 # Свой конфиг (включает кэш статики и fallback для SPA)
-COPY moepokolenie.ru.conf /etc/nginx/sites-available/moepokolenie.ru.conf
+COPY map.moepokolenie.ru.conf /etc/nginx/sites-available/map.moepokolenie.ru.conf
 
 # Кладём сайт в стандартную папку nginx
 COPY . /usr/share/nginx/html
