@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+
+    <!-- В <head> -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <title>Карта МП</title>
+    <!-- Подключаем Leaflet -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+      /* ===== Подключаем локальный шрифт ===== */
+      @font-face {
+        font-family: "Cinematografica";
+        src: url("Cinematografica-Light.ttf") format("truetype"); /* если файл в /fonts — укажи url("fonts/Cinematografica-Light.ttf") */
+        font-weight: 300; /* Light */
+        font-style: normal;
+        font-display: swap;
+      }
+
+      :root {
+        --font-text: "Cinematografica", system-ui, -apple-system, "Segoe UI",
+          Roboto, Arial, sans-serif;
+      }
+
+      /* Применяем везде по умолчанию */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: var(--font-text);
+      }
+
+      /* Leaflet иногда задаёт свой шрифт — переопределим основные области */
+      .leaflet-container,
+      .leaflet-control,
+      .leaflet-popup-content,
+      .leaflet-tooltip {
+        font-family: var(--font-text);
+      }
+
+      /* Карта на весь экран */
+      #map {
+        height: 100%;
+      }
+
+      .mp-marker {
+        position: relative;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #6aa1ff;
+        border: 3px solid white;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+        transform: translate(-50%, -100%);
+      }
+
+      /* Поисковая строка */
+      .search-container {
+        flex: 1;
+        position: absolute;
+        top: 20px;
+        z-index: 1000;
+        width: 100%;
+        display: flex;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+        font-family: var(--font-text);
+      }
+
+      .search-input {
+        flex: 1;
+        border: none;
+        padding: 12px 20px;
+        font-size: 16px;
+        outline: none;
+        background: transparent;
+        font-family: inherit;
+      }
+      .search-input::placeholder {
+        font-family: inherit;
+      }
+
+      .search-button {
+        background: #ff8c00;
+        border: none;
+        padding: 12px 20px;
+        color: white;
+        cursor: pointer;
+        font-weight: 700; /* чуть жирнее для кнопки */
+        width: 20%;
+        font-family: inherit;
+      }
+      .search-button:hover {
+        background: #ff6a00;
+      }
+
+      /* Кастомные кнопки зума */
+      .custom-zoom-control {
+        position: absolute;
+        right: 20px;
+        top: 70px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        font-family: var(--font-text);
+      }
+
+      .zoom-button {
+        width: 40px;
+        height: 40px;
+        background: white;
+        border: none;
+        font-size: 20px;
+        color: #ff8c00;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.3s;
+        font-family: inherit;
+      }
+      .zoom-button:hover {
+        background: #fff3e0;
+      }
+      .zoom-button:active {
+        background: #ffe0b2;
+      }
+      .zoom-button:first-child {
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      .empty-container {
+        position: absolute;
+        bottom: 0px;
+        z-index: 1000;
+        width: 100%;
+        background: #ff8c00;
+        color: white;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        font-weight: 700;
+        text-align: center;
+        padding: 5px;
+        font-family: var(--font-text);
+      }
+
+      /* Выпадающий список результатов */
+      .search-results {
+        position: absolute;
+        top: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        width: 400px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        max-height: 300px;
+        overflow-y: auto;
+        display: none;
+        font-family: var(--font-text);
+      }
+
+      .search-result-item {
+        padding: 12px 20px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background 0.2s;
+        font-family: inherit;
+      }
+      .search-result-item:hover {
+        background: #fff3e0;
+      }
+      .search-result-item:last-child {
+        border-bottom: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Контейнер для карты -->
+    <div id="map"></div>
+
+    <!-- Поисковая строка -->
+    <div class="search-container">
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Найди учебное заведение"
+        id="searchInput"
+      />
+      <button class="search-button" onclick="searchLocation()">Найти</button>
+    </div>
+
+    <!-- Выпадающий список результатов -->
+    <div class="search-results" id="searchResults"></div>
+
+    <!-- Кастомные кнопки зума -->
+    <div class="custom-zoom-control">
+      <button class="zoom-button" onclick="zoomIn()">+</button>
+      <button class="zoom-button" onclick="zoomOut()">−</button>
+    </div>
+
+    <div class="empty-container">Карта Мое Поколение</div>
+
+    <script>
+      // Глобальные переменные
+      const map = L.map("map", { zoomControl: false }).setView(
+        [55.7522, 37.6156],
+        13
+      );
+      let places = []; // Массив для хранения мест
+      let markers = []; // Массив для хранения маркеров
+
+      // Инициализация карты
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap",
+      }).addTo(map);
+
+      const mpIcon = L.icon({ iconUrl: "mp_marker.png", iconSize: [55, 55] });
+
+      // Функция для парсинга строки с координатами
+      function parsePlaceLine(line) {
+        line = line.trim();
+        if (!line) return null;
+        const coordRegex = /(-?\d+\.\d+)\s+(-?\d+\.\d+)$/;
+        const match = line.match(coordRegex);
+        if (!match) return null;
+        const lat = parseFloat(match[1]);
+        const lon = parseFloat(match[2]);
+        const name = line.substring(0, match.index).trim();
+        return { name, lat, lon };
+      }
+
+      // Функция для загрузки данных из файла
+      async function loadPlaces() {
+        try {
+          const response = await fetch("places.txt");
+          const text = await response.text();
+          const lines = text.split("\n").filter((line) => line.trim());
+
+          places = lines
+            .map((line) => {
+              const place = parsePlaceLine(line);
+              if (!place) {
+                console.warn("Не удалось распарсить строку:", line);
+                return null;
+              }
+              return place;
+            })
+            .filter((place) => place !== null);
+
+          // Отображаем все места на карте
+          displayPlaces(places);
+        } catch (error) {
+          console.error("Ошибка загрузки файла places.txt:", error);
+          alert("Не удалось загрузить данные мест");
+        }
+      }
+
+      // Функция для отображения мест на карте
+      function displayPlaces(placesToShow) {
+        clearMarkers();
+        placesToShow.forEach((place) => {
+          const marker = L.marker([place.lat, place.lon], { icon: mpIcon })
+            .addTo(map)
+            .bindPopup(`<b>${place.name}</b>`);
+          markers.push(marker);
+        });
+      }
+
+      // Функция для очистки маркеров
+      function clearMarkers() {
+        markers.forEach((marker) => map.removeLayer(marker));
+        markers = [];
+      }
+
+      // Функция поиска мест
+      function searchLocation() {
+        const query = document
+          .getElementById("searchInput")
+          .value.toLowerCase()
+          .trim();
+
+        if (!query) {
+          displayPlaces(places);
+          hideResults();
+          return;
+        }
+
+        const results = places.filter((place) =>
+          place.name.toLowerCase().includes(query)
+        );
+
+        if (results.length > 0) {
+          showResults(results);
+        } else {
+          hideResults();
+          alert("Ничего не найдено");
+        }
+      }
+
+      // Функция для отображения результатов поиска
+      function showResults(results) {
+        const resultsContainer = document.getElementById("searchResults");
+        resultsContainer.innerHTML = "";
+
+        results.forEach((place) => {
+          const item = document.createElement("div");
+          item.className = "search-result-item";
+          item.textContent = place.name;
+          item.onclick = () => {
+            map.setView([place.lat, place.lon], 15);
+            displayPlaces([place]);
+            hideResults();
+            document.getElementById("searchInput").value = place.name;
+          };
+          resultsContainer.appendChild(item);
+        });
+
+        resultsContainer.style.display = "block";
+      }
+
+      // Функция для скрытия результатов поиска
+      function hideResults() {
+        document.getElementById("searchResults").style.display = "none";
+      }
+
+      // Кнопки зума
+      function zoomIn() {
+        map.zoomIn();
+      }
+      function zoomOut() {
+        map.zoomOut();
+      }
+
+      // Обработчики событий
+      document
+        .getElementById("searchInput")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") searchLocation();
+        });
+
+      document
+        .getElementById("searchInput")
+        .addEventListener("input", function () {
+          if (this.value === "") {
+            displayPlaces(places);
+            hideResults();
+          }
+        });
+
+      document.addEventListener("click", function (e) {
+        if (
+          !e.target.closest(".search-container") &&
+          !e.target.closest(".search-results")
+        ) {
+          hideResults();
+        }
+      });
+
+      // Старт
+      loadPlaces();
+
+      // В самом начале твоего <script> перед логикой
+      const tg = window.Telegram?.WebApp;
+      if (tg) {
+        tg.ready(); // сказать Telegram, что интерфейс готов
+        tg.expand(); // развернуть на всю высоту
+        // при желании: tg.MainButton.setText("Ок").show().onClick(()=>{ ... });
+      }
+    </script>
+  </body>
+</html>
